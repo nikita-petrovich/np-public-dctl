@@ -1,0 +1,57 @@
+// clang-format off
+
+DEFINE_UI_PARAMS(saturation, Saturation, DCTLUI_SLIDER_FLOAT, 1.0, 0.0, 2.0, 0.001)
+
+DEFINE_UI_PARAMS(satType, Type, DCTLUI_COMBO_BOX, 0, {satSubtractive, satStandard, satMiddle, satAdditive, satRbase, satGbase, satBbase}, {Subtractive, Standard, Middle, Additive, R-base, G-base, B-base})
+DEFINE_UI_PARAMS(copyright, DCTL by, DCTLUI_COMBO_BOX, 0, { name, vimeo, version }, { Nikita Petrovich, vimeo.com/petrovichnik, v0.1.0 })
+
+DEFINE_UI_TOOLTIP(Type, "Subtractive: Adjusts from highest RGB | Standard: Standard saturation (Adjusts from Lum value) | Middle: Adjusts from mid channel | Additive: Adjusts from lowest channel | R/G/B-base: Adjusts from specified channel")
+
+// clang-format on
+
+__DEVICE__ float calcLumPtr(__PRIVATE__ float3 *pixel) {
+  return 0.2126f * pixel->x + 0.7152f * pixel->y + 0.0722f * pixel->z;
+}
+
+// clang-format off
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B) {
+
+  // clang-format on
+
+  float3 srcPixel{p_R, p_G, p_B};
+  float base{};
+
+  switch (satType) {
+  case satSubtractive:
+    base = _fmaxf(srcPixel.x, _fmaxf(srcPixel.y, srcPixel.z));
+    break;
+  case satStandard:
+    base = calcLumPtr(&srcPixel);
+    break;
+  case satMiddle:
+    base = srcPixel.x + srcPixel.y + srcPixel.z -
+           _fminf(srcPixel.x, _fminf(srcPixel.y, srcPixel.z)) -
+           _fmaxf(srcPixel.x, _fmaxf(srcPixel.y, srcPixel.z));
+    break;
+  case satAdditive:
+    base = _fminf(srcPixel.x, _fminf(srcPixel.y, srcPixel.z));
+    break;
+  case satRbase:
+    base = srcPixel.x;
+    break;
+  case satGbase:
+    base = srcPixel.y;
+    break;
+  case satBbase:
+    base = srcPixel.z;
+    break;
+  default:
+    break;
+  }
+
+  float3 outPixel{};
+  outPixel = base + saturation * (srcPixel - base);
+
+  return outPixel;
+}
