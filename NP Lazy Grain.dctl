@@ -1,0 +1,127 @@
+// clang-format off
+
+DEFINE_UI_PARAMS(lift, Lift, DCTLUI_SLIDER_FLOAT, 0.0, -1.0, 1.0, 0.001)
+DEFINE_UI_PARAMS(gamma, Gamma, DCTLUI_SLIDER_FLOAT, 0.0, -0.999, 0.999, 0.001)
+DEFINE_UI_PARAMS(gain, Gain, DCTLUI_SLIDER_FLOAT, 0.0, -1.0, 1.0, 0.001)
+DEFINE_UI_PARAMS(offset, Offset, DCTLUI_SLIDER_FLOAT, 0.0, -1.0, 1.0, 0.001)
+DEFINE_UI_PARAMS(saturation, Saturation, DCTLUI_SLIDER_FLOAT, 0.0, -1.0, 1.0, 0.001)
+DEFINE_UI_PARAMS(uiSeed, Random Seed, DCTLUI_SLIDER_FLOAT, 0, 0, 100000, 1)
+
+DEFINE_UI_PARAMS(showRamp, Show Ramp, DCTLUI_CHECK_BOX, 0)
+
+DEFINE_UI_PARAMS(twoDirLift, 2-directional Lift, DCTLUI_CHECK_BOX, 1)
+DEFINE_UI_PARAMS(twoDirGamma, 2-directional Gamma, DCTLUI_CHECK_BOX, 1)
+DEFINE_UI_PARAMS(twoDirGain, 2-directional Gain, DCTLUI_CHECK_BOX, 1)
+DEFINE_UI_PARAMS(twoDirOffset, 2-directional Offset, DCTLUI_CHECK_BOX, 1)
+DEFINE_UI_PARAMS(twoDirSaturation, 2-directional Saturation, DCTLUI_CHECK_BOX, 1)
+
+DEFINE_UI_PARAMS(probLift, Lift Probability, DCTLUI_CHECK_BOX, 1)
+DEFINE_UI_PARAMS(probGamma, Gamma Probability, DCTLUI_CHECK_BOX, 1)
+DEFINE_UI_PARAMS(probGain, Gain Probability, DCTLUI_CHECK_BOX, 1)
+
+DEFINE_UI_PARAMS(clamp, Clamp, DCTLUI_CHECK_BOX, 0)
+
+DEFINE_UI_PARAMS(copyright, DCTL by, DCTLUI_COMBO_BOX, 0, { name, vimeo, version }, { Nikita Petrovich, vimeo.com/petrovichnik, v0.1.0 })
+
+////////////////////////////
+/////// UI TOOLTIPS ////////
+////////////////////////////
+
+DEFINE_UI_TOOLTIP(Saturation, "Subtractive saturation grain")
+DEFINE_UI_TOOLTIP(Random Seed, "Animate if the grain is almost static")
+
+DEFINE_UI_TOOLTIP(2-directional Lift, "Randomly varies Lift in both positive and negative directions")
+DEFINE_UI_TOOLTIP(2-directional Gamma, "Randomly varies Gamma in both positive and negative directions")
+DEFINE_UI_TOOLTIP(2-directional Gain, "Randomly varies Gain in both positive and negative directions")
+DEFINE_UI_TOOLTIP(2-directional Offset, "Randomly varies Offset in both positive and negative directions")
+DEFINE_UI_TOOLTIP(2-directional Saturation, "Randomly varies Saturation in both positive and negative directions")
+
+DEFINE_UI_TOOLTIP(Lift Probability, "Higher luminance = lower grain probability (highlights get less grain)")
+DEFINE_UI_TOOLTIP(Gamma Probability, "Luminance away from 0.5 = lower grain probability (midtones get more grain)")
+DEFINE_UI_TOOLTIP(Gain Probability, "Lower luminance = lower grain probability (shadows get less grain)")
+
+DEFINE_UI_TOOLTIP(Clamp, "Clamps pixels to be within the interval [0.0, 1.0]")
+
+// clang-format on
+
+__DEVICE__ float calcLum(__PRIVATE__ float3 *pixel) {
+  return 0.2126f * pixel->x + 0.7152f * pixel->y + 0.0722f * pixel->z;
+}
+
+// Keep the sign of the base after using _powf()
+__DEVICE__ float signPowf(float base, float power) {
+  return _copysignf(_powf(_fabs(base), power), base);
+}
+
+__DEVICE__ float3 gammaf(__PRIVATE__ float3 *pixel, float gamma) {
+  return make_float3(signPowf(pixel->x, gamma), signPowf(pixel->y, gamma),
+                     signPowf(pixel->z, gamma));
+}
+
+// clang-format off
+
+ __DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B) {
+  // clang-format on
+
+  float3 srcPixel{p_R, p_G, p_B};
+
+  if (showRamp && p_Y > 0.8f * p_Height) {
+    srcPixel = (float)p_X / (p_Width - 1);
+  }
+
+  float srcLum{calcLum(&srcPixel)};
+
+  uint baseSeed{};
+  baseSeed =
+      TIMELINE_FRAME_INDEX + p_X + p_Y * p_Width + srcLum * 1000000.f + uiSeed;
+
+  float applyGrainProb{RAND(baseSeed)};
+
+  if (lift && srcLum * probLift <= applyGrainProb) {
+    float randLift{RAND(baseSeed + lift * 1000.f) * (lift + lift * twoDirLift) -
+                   lift * twoDirLift};
+    srcPixel += randLift * (1.f - srcPixel);
+  }
+
+  // Parabola y = a*x^2 + b*x
+  // a = -4, b = 4, and x = 0.5 => y = 1.0
+  bool applyGamma{(-4.f * srcLum * srcLum + 4.f * srcLum) >=
+                  applyGrainProb * probGamma};
+
+  if (gamma && applyGamma) {
+    float randGamma{RAND(baseSeed + gamma * 2000.f) *
+                        (gamma + gamma * twoDirGamma) -
+                    gamma * twoDirGamma};
+    srcPixel = gammaf(&srcPixel, 1.f / (randGamma + 1.f));
+  }
+
+  if (gain && (1.f - srcLum) * probGain <= applyGrainProb) {
+    float randGain{RAND(baseSeed + gain * 3000.f) * (gain + gain * twoDirGain) -
+                   gain * twoDirGain + 1.f};
+    srcPixel *= randGain;
+  }
+
+  if (offset) {
+    float randOffset{RAND(baseSeed + offset * 4000.f) *
+                         (offset + offset * twoDirOffset) -
+                     offset * twoDirOffset};
+    srcPixel += randOffset;
+  }
+
+  if (saturation) {
+    float randSaturation{RAND(baseSeed + saturation * 5000.f) *
+                             (saturation + saturation * twoDirSaturation) -
+                         saturation * twoDirSaturation + 1.f};
+
+    float satPivot{_fmaxf(srcPixel.x, _fmaxf(srcPixel.y, srcPixel.z))};
+    srcPixel = satPivot + randSaturation * (srcPixel - satPivot);
+  }
+
+  if (clamp) {
+    srcPixel.x = _saturatef(srcPixel.x);
+    srcPixel.y = _saturatef(srcPixel.y);
+    srcPixel.z = _saturatef(srcPixel.z);
+  }
+
+  return srcPixel;
+}
