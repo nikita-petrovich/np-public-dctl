@@ -32,6 +32,13 @@ This custom RGB‑based DCTL gives you clean, artifact‑free saturation.
 
 ---
 
+## 🔌 My OpenFX Plugin Concepts
+
+- [**QRCoder**](https://github.com/nikita-petrovich/OFX-QRCoder) – Generate QR codes directly inside DaVinci Resolve or any OpenFX host.  
+- [**Nikita Blend Mode**](https://github.com/nikita-petrovich/nikita-blend-mode) – An original composite mode (`a + luma(a) − b`) that could be used to create a unique bleach‑bypass style effect.
+
+---
+
 ## 📁 Installation
 
 - If this is your first DCTL, simply drag the .dctl file into your Resolve LUT folder, then restart DaVinci to see it in the list of DCTLs in OpenFX.
