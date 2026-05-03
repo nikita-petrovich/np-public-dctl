@@ -5,6 +5,15 @@ No overengineering — just practical, creative tools.
 
 ---
 
+### Lazy Blur  
+[![Watch the video](https://img.youtube.com/vi/oz4jkEMOCYg/maxresdefault.jpg)](https://www.youtube.com/watch?v=oz4jkEMOCYg)
+
+Blurs per pixel in random directions. Perfect for filmic softness, glass blur effects, or stylising graphics. Works great with Lazy Grain DCTL.
+
+[Learn more in the video](https://www.youtube.com/watch?v=oz4jkEMOCYg)
+
+---
+
 ### Lazy Grain  
 [![Watch the video](https://img.youtube.com/vi/EV1LnvAtIL4/maxresdefault.jpg)](https://youtu.be/EV1LnvAtIL4)
 
