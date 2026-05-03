@@ -1,0 +1,164 @@
+#define PI 3.1415927f
+
+// clang-format off
+
+DEFINE_UI_PARAMS(uiBlur, Blur, DCTLUI_SLIDER_FLOAT, 0.0, 0.0, 1.0, 0.001)
+
+DEFINE_UI_PARAMS(uiLumContrast, Inner Contrast, DCTLUI_SLIDER_FLOAT, 1.0, 0.0, 2.0, 0.001)
+DEFINE_UI_PARAMS(uiLumContrastPivot, Inner Pivot, DCTLUI_SLIDER_FLOAT, 0.336, 0.0, 1.0, 0.001)
+DEFINE_UI_PARAMS(uiLumDependent, Lum Dependent, DCTLUI_SLIDER_INT, 0, 0, 3, 1)
+
+DEFINE_UI_PARAMS(uiSeed, Random Seed, DCTLUI_SLIDER_INT, 0, 0, 100000, 1)
+
+DEFINE_UI_PARAMS(uiDynamic, Dynamic, DCTLUI_CHECK_BOX, 1)
+DEFINE_UI_PARAMS(uiBlurType, Type, DCTLUI_COMBO_BOX, 0, {uiGaussian, uiAverage}, {Gaussian, Average})
+
+DEFINE_UI_PARAMS(copyright, DCTL by, DCTLUI_COMBO_BOX, 0, {name, vimeo, version}, {Nikita Petrovich, vimeo.com/petrovichnik, v0.1.0})
+
+////////////////////////////
+/////// UI TOOLTIPS ////////
+////////////////////////////
+
+DEFINE_UI_TOOLTIP(Inner Contrast, "Adjusts contrast for Lum Dependent feature")
+DEFINE_UI_TOOLTIP(Inner Pivot, "Brightness midpoint around which the Inner Contrast is centered")
+DEFINE_UI_TOOLTIP(Lum Dependent, "0: Off | 1: Shadows get more blur  | 2: Midtones get more blur | 3: Highlights get more blur")
+
+// clang-format on
+
+typedef struct {
+  int a;
+  int b;
+} int2_t;
+
+__DEVICE__ int2_t makeInt2(int a, int b) {
+  int2_t x{a, b};
+  return x;
+}
+
+__DEVICE__ float calcLum(__PRIVATE__ float3 *pixel) {
+  return 0.2126f * pixel->x + 0.7152f * pixel->y + 0.0722f * pixel->z;
+}
+
+__DEVICE__ int2_t findDirParams(int dir) {
+  switch (dir) {
+  case 0:
+    return makeInt2(-1, -1);
+  case 1:
+    return makeInt2(0, -1);
+  case 2:
+    return makeInt2(1, -1);
+  case 3:
+    return makeInt2(-1, 0);
+  case 4:
+    return makeInt2(1, 0);
+  case 5:
+    return makeInt2(-1, 1);
+  case 6:
+    return makeInt2(0, 1);
+  case 7:
+    return makeInt2(1, 1);
+  }
+}
+
+__DEVICE__ float getGaussianWeight(int x, float sigma) {
+  if (sigma == 0) {
+    return 1.f;
+  } else {
+    return 1.f / (_sqrtf(2.f * PI) * sigma) *
+           _expf((x * x) / (-2 * sigma * sigma));
+  }
+}
+
+__DEVICE__ float getLumDependentMultiplier(int a, float lum) {
+
+  lum = _saturatef(lum);
+
+  switch (a) {
+  case 0:
+    return 1.f;
+  case 1:
+    return 1.f - lum;
+  case 2:
+    // Parabola y = a*x^2 + b*x
+    // a = -4, b = 4, and x = 0.5 => y = 1.0
+    return -4.f * lum * lum + 4.f * lum;
+  case 3:
+    return lum;
+  default:
+    return 1.f;
+  }
+}
+
+__DEVICE__ float adjustContrast(float inValue, float contrast, float pivot) {
+  return contrast * (inValue - pivot) + pivot;
+}
+
+// clang-format off
+
+ __DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, __TEXTURE__ p_TexR, __TEXTURE__ p_TexG, __TEXTURE__ p_TexB) {
+  // clang-format on
+
+  float3 srcPixel{_tex2D(p_TexR, p_X, p_Y), _tex2D(p_TexG, p_X, p_Y),
+                  _tex2D(p_TexB, p_X, p_Y)};
+
+  float srcLum{calcLum(&srcPixel)};
+
+  uint baseSeed{};
+  baseSeed = p_X + p_Y * p_Width +
+             (srcLum * 1000000.f + TIMELINE_FRAME_INDEX) * uiDynamic + uiSeed;
+
+  float rand{RAND(baseSeed)};
+
+  int dir{(int)_round(rand * 7.f)};
+  int2_t dirParams{findDirParams(dir)};
+
+  float lumDependentMultiplier{getLumDependentMultiplier(
+      uiLumDependent,
+      adjustContrast(srcLum, uiLumContrast, uiLumContrastPivot))};
+
+  if (!lumDependentMultiplier) {
+    return srcPixel;
+  }
+
+  // Normalized blur size, based on 20 pixels in a FullHD timeline
+  float blur{20.f / 1920.f * (float)max(p_Width, p_Height) * uiBlur};
+
+  float3 outPixel{srcPixel};
+  if (uiBlur && uiBlurType == uiAverage) {
+
+    int size{(int)_round(blur * lumDependentMultiplier) + 1};
+
+    for (int i = 1; i < size; ++i) {
+      outPixel.x +=
+          _tex2D(p_TexR, p_X + i * dirParams.a, p_Y + i * dirParams.b);
+      outPixel.y +=
+          _tex2D(p_TexG, p_X + i * dirParams.a, p_Y + i * dirParams.b);
+      outPixel.z +=
+          _tex2D(p_TexB, p_X + i * dirParams.a, p_Y + i * dirParams.b);
+    }
+    outPixel /= size;
+
+  } else if (uiBlur && uiBlurType == uiGaussian) {
+
+    float weightSum{};
+    outPixel = 0.f;
+
+    // +0.5f to take even a small fraction of the
+    // next pixel into account
+    for (int i = 0; i <= (int)_round(blur + 0.5f); ++i) {
+
+      // /2.f since blur is unidirectional
+      float weight{getGaussianWeight(i, (blur / 2.f) * lumDependentMultiplier)};
+      outPixel.x +=
+          _tex2D(p_TexR, p_X + i * dirParams.a, p_Y + i * dirParams.b) * weight;
+      outPixel.y +=
+          _tex2D(p_TexG, p_X + i * dirParams.a, p_Y + i * dirParams.b) * weight;
+      outPixel.z +=
+          _tex2D(p_TexB, p_X + i * dirParams.a, p_Y + i * dirParams.b) * weight;
+      weightSum += weight;
+    }
+    outPixel /= weightSum;
+  }
+
+  return outPixel;
+}
