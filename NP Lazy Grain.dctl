@@ -1,3 +1,5 @@
+#line 2
+
 // clang-format off
 
 DEFINE_UI_PARAMS(lift, Lift, DCTLUI_SLIDER_FLOAT, 0.0, -1.0, 1.0, 0.001)
@@ -66,7 +68,9 @@ __DEVICE__ float3 gammaf(__PRIVATE__ float3 *pixel, float gamma) {
   float3 srcPixel{p_R, p_G, p_B};
 
   if (showRamp && p_Y > 0.8f * p_Height) {
-    srcPixel = (float)p_X / (p_Width - 1);
+    srcPixel.x = (float)p_X / (p_Width - 1);
+    srcPixel.y = (float)p_X / (p_Width - 1);
+    srcPixel.z = (float)p_X / (p_Width - 1);
   }
 
   float srcLum{calcLum(&srcPixel)};
