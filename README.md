@@ -3,6 +3,10 @@
 A collection of simple, conceptual DCTLs that turned out interesting enough to share with the world.  
 No overengineering — just practical, creative tools.
 
+**System Requirements:** 
+* DaVinci Resolve Studio 19.1 and newer;
+* GPU: NVIDIA or Apple Silicon. Not tested on other systems.
+
 ---
 
 ### Lazy Blur  
