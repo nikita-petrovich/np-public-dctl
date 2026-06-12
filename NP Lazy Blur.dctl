@@ -1,3 +1,5 @@
+#line 2
+
 #define PI 3.1415927f
 
 // clang-format off
@@ -58,6 +60,8 @@ __DEVICE__ int2_t findDirParams(int dir) {
   case 7:
     return makeInt2(1, 1);
   }
+
+  return makeInt2(0, 0);
 }
 
 __DEVICE__ float getGaussianWeight(int x, float sigma) {
@@ -141,7 +145,7 @@ __DEVICE__ float adjustContrast(float inValue, float contrast, float pivot) {
   } else if (uiBlur && uiBlurType == uiGaussian) {
 
     float weightSum{};
-    outPixel = 0.f;
+    outPixel = make_float3(0.f, 0.f, 0.f);
 
     // +0.5f to take even a small fraction of the
     // next pixel into account
