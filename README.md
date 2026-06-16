@@ -9,8 +9,20 @@ No overengineering — just practical, creative tools.
 
 ---
 
-### Lazy Blur  
-[![Watch the video](https://img.youtube.com/vi/oz4jkEMOCYg/maxresdefault.jpg)](https://www.youtube.com/watch?v=oz4jkEMOCYg)
+### Lazy Bleach
+
+Creates a Bleach Bypass-like look by finding an average color of the current frame and applying it on top of the source image using a custom blend mode.
+
+> [!CAUTION]
+> Unusable on a low-end PC.
+> Almost unusable on timelines larger than 4K.
+> Lower the quality value very carefully!
+
+[Learn more in the video](https://www.youtube.com/watch?v=gM-Ja1gioj4)
+
+---
+
+### Lazy Blur
 
 Blurs per pixel in random directions. Perfect for filmic softness, glass blur effects, or stylising graphics. Works great with Lazy Grain DCTL.
 
@@ -18,8 +30,7 @@ Blurs per pixel in random directions. Perfect for filmic softness, glass blur ef
 
 ---
 
-### Lazy Grain  
-[![Watch the video](https://img.youtube.com/vi/EV1LnvAtIL4/maxresdefault.jpg)](https://youtu.be/EV1LnvAtIL4)
+### Lazy Grain
 
 Adds film grain by applying random Lift, Gamma, Gain, Offset, and subtractive saturation **per pixel**.  
 No noise textures, no scanned film analysis — just lazy randomness.
@@ -28,8 +39,7 @@ No noise textures, no scanned film analysis — just lazy randomness.
 
 ---
 
-### Saturation RGB  
-[![Watch the video](https://img.youtube.com/vi/gx2KwL1FD7Y/maxresdefault.jpg)](https://youtu.be/gx2KwL1FD7Y)
+### Saturation RGB
 
 DaVinci Resolve’s native HSV saturation looks great, until it destroys your shadows.  
 This custom RGB‑based DCTL gives you clean, artifact‑free saturation.

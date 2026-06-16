@@ -1,0 +1,62 @@
+// clang-format off
+DEFINE_UI_PARAMS(uiStep, Quality [Lower - Better], DCTLUI_SLIDER_INT, 155, 10, 300, 1)
+DEFINE_UI_PARAMS(uiRollOff, Roll-off, DCTLUI_CHECK_BOX, 1)
+
+DEFINE_UI_PARAMS(copyright, DCTL by, DCTLUI_COMBO_BOX, 0, { name, vimeo, version }, { Nikita Petrovich, vimeo.com/petrovichnik, v0.1.0 })
+
+DEFINE_UI_TOOLTIP(Quality [Lower - Better], "Reference values for 30fps on Apple M1 Max: 4K - 155; FHD - 38")
+// clang-format on
+
+__DEVICE__ float calcLum(__PRIVATE__ float3 *pixel) {
+  return 0.2126f * pixel->x + 0.7152f * pixel->y + 0.0722f * pixel->z;
+}
+
+__DEVICE__ float makeRollOff(float in, float threshold) {
+  if (in < threshold) {
+    return threshold * (1.f - _tanhf((threshold - in) / threshold));
+  } else if (threshold <= in && in <= 1.f - threshold) {
+    return in;
+  } else {
+    return (1.f - threshold) +
+           threshold * _tanhf((in - (1.f - threshold)) / threshold);
+  }
+}
+
+__DEVICE__ void pixelRollOff(__PRIVATE__ float3 *outColor, float threshold) {
+  outColor->x = makeRollOff(outColor->x, threshold);
+  outColor->y = makeRollOff(outColor->y, threshold);
+  outColor->z = makeRollOff(outColor->z, threshold);
+}
+
+// clang-format off
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, __TEXTURE__ p_TexR, __TEXTURE__ p_TexG, __TEXTURE__ p_TexB)
+{
+  // clang-format on
+
+  float3 srcColor{_tex2D(p_TexR, p_X, p_Y), _tex2D(p_TexG, p_X, p_Y),
+                  _tex2D(p_TexB, p_X, p_Y)};
+  float srcLum{calcLum(&srcColor)};
+
+  float3 outColor{0.f, 0.f, 0.f};
+
+  // Find average color of the frame
+  float count{0.f};
+  for (int Y = 0; Y < p_Height; Y += uiStep) {
+    for (int X = 0; X < p_Width; X += uiStep) {
+      outColor.x += _tex2D(p_TexR, X, Y);
+      outColor.y += _tex2D(p_TexG, X, Y);
+      outColor.z += _tex2D(p_TexB, X, Y);
+      ++count;
+    }
+  }
+  outColor /= count;
+
+  // Custom blend mode - https://youtu.be/gM-Ja1gioj4
+  outColor = srcColor + (srcLum - outColor);
+
+  if (uiRollOff) {
+    pixelRollOff(&outColor, 0.5f);
+  }
+
+  return outColor;
+}
