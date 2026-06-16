@@ -14,8 +14,11 @@ No overengineering — just practical, creative tools.
 Creates a Bleach Bypass-like look by finding an average color of the current frame and applying it on top of the source image using a custom blend mode.
 
 > [!CAUTION]
+> 
 > Unusable on a low-end PC.
+> 
 > Almost unusable on timelines larger than 4K.
+> 
 > Lower the quality value very carefully!
 
 [Learn more in the video](https://www.youtube.com/watch?v=gM-Ja1gioj4)
