@@ -5,11 +5,19 @@ No overengineering — just practical, creative tools.
 
 > [!NOTE]
 >
-> I only sell my DCTLs through [**aescripts**](https://aescripts.com/authors/m-p/nikita-petrovich/) – no other marketplaces or direct sales.
+> [**aescripts**](https://aescripts.com/authors/m-p/nikita-petrovich/) is the only seller of my DCTLs – no other marketplaces or direct sales.
 
 **System Requirements:** 
 * DaVinci Resolve Studio 19.1 and newer;
 * GPU: NVIDIA or Apple Silicon. Not tested on other systems.
+
+---
+
+### Lazy Banding
+
+Turns light banding into a creative tool. Works in any color space. Even ones that don't exist yet. How? It's a mask.
+
+[Learn more in the video](https://youtu.be/WQOc0QRXqgM)
 
 ---
 
@@ -65,7 +73,7 @@ This custom RGB‑based DCTL gives you clean, artifact‑free saturation.
 ## 🔌 My OpenFX Plugin Concepts
 
 - [**QRCoder**](https://github.com/nikita-petrovich/OFX-QRCoder) – Generate QR codes directly inside DaVinci Resolve or any OpenFX host.  
-- [**Nikita Blend Mode**](https://github.com/nikita-petrovich/nikita-blend-mode) – An original composite mode (`a + luma(a) − b`) that could be used to create a unique bleach‑bypass style effect.
+- [**Blend Mode**](https://github.com/nikita-petrovich/nikita-blend-mode) – An original composite mode (`a + luma(a) − b`) that could be used to create a unique bleach‑bypass style effect.
 
 ---
 
