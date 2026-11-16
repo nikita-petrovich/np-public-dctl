@@ -1,0 +1,144 @@
+#line 2
+
+DEFINE_DCTL_ALPHA_MODE_STRAIGHT
+
+// #define PI 3.14159265359f
+#define TWO_PI 6.28318530718f
+
+// clang-format off
+
+DEFINE_UI_PARAMS(uiFrequency, Frequency, DCTLUI_SLIDER_FLOAT, 1.f, 0.01f, 50.f, 0.01f)
+DEFINE_UI_PARAMS(uiSize, Size, DCTLUI_SLIDER_FLOAT, .5f, 0.f, 1.f, 0.001f)
+DEFINE_UI_PARAMS(uiAngle, Angle, DCTLUI_SLIDER_FLOAT, 0.f, -360.f, 360.f, 0.1f)
+DEFINE_UI_PARAMS(uiOffset, Offset, DCTLUI_SLIDER_FLOAT, 0.f, -1.f, 1.f, 0.001f)
+DEFINE_UI_PARAMS(uiVelocity, Velocity, DCTLUI_SLIDER_FLOAT, 0.f, -1.f, 1.f, 0.001f)
+
+DEFINE_UI_PARAMS(uiSoft, Soft, DCTLUI_SLIDER_FLOAT, .01f, 0.f, 1.f, 0.001f)
+DEFINE_UI_PARAMS(uiPivot, Pivot, DCTLUI_SLIDER_FLOAT, .5f, 0.f, 1.f, 0.001f)
+
+DEFINE_UI_PARAMS(uiPower, Power, DCTLUI_SLIDER_FLOAT, 1.f, 0.f, 1.f, 0.001f)
+DEFINE_UI_PARAMS(uiFlickering, Flickering, DCTLUI_SLIDER_FLOAT, 0.f, 0.f, 1.f, 0.001f)
+DEFINE_UI_PARAMS(uiRandomSeed, Random Seed, DCTLUI_SLIDER_INT, 0, 0, 99999, 1)
+
+DEFINE_UI_PARAMS(uiShowMask, Show Mask, DCTLUI_CHECK_BOX, 1)
+DEFINE_UI_PARAMS(uiInvert, Invert, DCTLUI_CHECK_BOX, 0)
+
+DEFINE_UI_PARAMS(uiMergeMattes, Merge, DCTLUI_COMBO_BOX, 0, { uiMergeIn, uiMergeOut, uiMergeUnion }, { In, Out, Union })
+
+DEFINE_UI_TOOLTIP(Frequency, "Number of bands per frame height")
+DEFINE_UI_TOOLTIP(Size, "Width of the bands")
+DEFINE_UI_TOOLTIP(Angle, "Rotation of the bands in degrees")
+DEFINE_UI_TOOLTIP(Offset, "Shifts the bands across the frame")
+DEFINE_UI_TOOLTIP(Velocity, "Drift speed of the bands. E.g. 0.01 = one band passes every 100 frames")
+
+DEFINE_UI_TOOLTIP(Soft, "Softness of the band edges")
+DEFINE_UI_TOOLTIP(Pivot, "Shifts the bright core of each band to one side. 0.5 = symmetric. Pair with Soft to mimic different light sources")
+
+DEFINE_UI_TOOLTIP(Power, "Scales the intensity of the mask")
+DEFINE_UI_TOOLTIP(Flickering, "Chance per frame that the bands drops out completely. 0 = always on, 1 = always off")
+DEFINE_UI_TOOLTIP(Random Seed, "Seed for the flicker sequence. Change it to get a different flickering pattern")
+
+DEFINE_UI_TOOLTIP(Show Mask, "Preview the matte as grayscale. Turn off to output the matte in the alpha channel and connect the node's alpha output downstream")
+DEFINE_UI_TOOLTIP(Invert, "Inverts the matte")
+
+DEFINE_UI_TOOLTIP(Merge, "How the bands combine with the incoming mask. In = keep bands only inside the mask, Out = keep bands only outside it, Union = keep both. With no incoming mask, Out produces nothing. DCTL by Nikita Petrovich, vimeo.com/petrovichnik, v0.1.0")
+
+// clang-format on
+
+__DEVICE__ float2 rotateUV(const float2 uv, const float angle) {
+
+  const float c{_cospif(angle / 180.f)};
+  const float s{_sinpif(angle / 180.f)};
+
+  return make_float2(c * uv.x - s * uv.y, s * uv.x + c * uv.y);
+}
+
+__DEVICE__ float2 makeUV(const int X, const int Y, const int width,
+                         const int height, const float angle,
+                         const float frequency) {
+
+  const float ratio{(float)width / height};
+  float2 uv{(float)X / (width - 1), (float)Y / (height - 1)};
+
+  uv -= 0.5f;
+  uv.x *= ratio;
+
+  uv = rotateUV(uv, -angle);
+  uv.y *= frequency;
+
+  uv += 0.5f;
+
+  return uv;
+}
+
+__DEVICE__ float smoothstep(const float edge0, const float edge1,
+                            const float x) {
+  if (_fabs(edge1 - edge0) < 1e-6f) {
+    return (x < edge0) ? 0.0f : 1.0f;
+  }
+
+  const float t{_saturatef((x - edge0) / (edge1 - edge0))};
+  return t * t * (3.0f - 2.0f * t);
+}
+
+__DEVICE__ float warp(const float f, float t) {
+  t = _clampf(1.f - t, 1e-4, 1.0 - 1e-4);
+  return f < t ? 0.5 * f / t : 0.5 + 0.5 * (f - t) / (1.0 - t);
+}
+
+__DEVICE__ float mergeMattes(const float a, const float b, const int mode) {
+  switch (mode) {
+  case uiMergeIn:
+    return a * b;
+  case uiMergeOut:
+    return a * (1.f - b);
+  case uiMergeUnion:
+    return _fmaxf(a, b);
+
+  default:
+    return a;
+  }
+
+  return a;
+}
+
+// clang-format off
+
+__DEVICE__ float4 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B, float p_A)
+{ // clang-format on
+
+  float2 uv{makeUV(p_X, p_Y, p_Width, p_Height, uiAngle, uiFrequency)};
+
+  // % 1000 bounds float precision on long timelines
+  uv.y += uiOffset + TIMELINE_FRAME_INDEX % 1000 * uiVelocity;
+
+  // fractional value of the band coordinates, wrapped to 0-1
+  const float f{uv.y - _floorf(uv.y)};
+
+  const float wave{_sinf((warp(f, uiPivot) - 0.25f) * TWO_PI) * 0.5f + 0.5f};
+
+  // return make_float4(wave, wave, wave, 1.f);
+
+  const float size{1.f - uiSize};
+  float outMask{smoothstep(size, size + uiSoft * uiSize, wave)};
+
+  if (uiInvert) {
+    outMask = 1.f - outMask;
+  }
+
+  float flicker{1.f};
+  if (uiFlickering) {
+    float randFlicker{RAND(TIMELINE_FRAME_INDEX + uiRandomSeed)};
+    if (randFlicker < uiFlickering) {
+      flicker = 0.f;
+    }
+  }
+
+  outMask = mergeMattes(outMask, p_A, uiMergeMattes) * flicker * uiPower;
+
+  if (uiShowMask) {
+    return make_float4(outMask, outMask, outMask, 1.f);
+  }
+
+  return make_float4(p_R, p_G, p_B, outMask);
+}
